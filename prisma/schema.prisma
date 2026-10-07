@@ -1,0 +1,255 @@
+// Capsule Access — Schéma de base de données
+// MVP multi-villes RDC : Kisangani, Kinshasa, Lubumbashi
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ACHETEUR
+  VENDEUR
+  ADMIN
+}
+
+enum VilleRDC {
+  KISANGANI
+  KINSHASA
+  LUBUMBASHI
+}
+
+enum TypeLivraison {
+  LOCALE     // Livraison directe dans la même ville (livreur de la boutique)
+  EXPEDITION // Expédition inter-villes via agence de transport
+}
+
+// Cycle de vie de l'argent du client (indépendant du statut d'avancement
+// de la commande) — modèle de séquestre adapté au paiement par preuve
+// (Mobile Money sans API d'intégration disponible).
+enum StatutPaiement {
+  EN_ATTENTE_PREUVE        // Le client n'a pas encore soumis de preuve
+  EN_ATTENTE_VERIFICATION  // Preuve soumise, en attente de vérification admin
+  BLOQUE_SEQUESTRE         // Vérifiée : fonds sécurisés, le vendeur peut expédier
+  LIBERE_VENDEUR           // Client a confirmé réception : fonds libérés
+  REMBOURSE                // Litige résolu par remboursement
+}
+
+enum StatutCommande {
+  EN_ATTENTE
+  PAYEE
+  CONFIRMEE
+  EN_PREPARATION
+  PRETE
+  EN_LIVRAISON
+  LIVREE
+  TERMINEE
+  ANNULEE
+  LITIGE
+}
+
+enum StatutLitige {
+  OUVERT
+  EN_EXAMEN
+  RESOLU_REMBOURSEMENT
+  RESOLU_REMPLACEMENT
+  RESOLU_AUTRE
+  REJETE
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  message   String
+  lien      String?
+  lu        Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, lu])
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  motDePasseHash String
+  nom            String
+  telephone      String?
+  role           Role      @default(ACHETEUR)
+  createdAt      DateTime  @default(now())
+
+  boutique          Boutique?
+  commandes         Commande[] @relation("commandesAcheteur")
+  evaluations       Evaluation[]
+  litiges           Litige[]
+  adresses          Adresse[]
+  panier            Panier?
+  notifications     Notification[]
+  messagesExpedition MessageExpedition[]
+}
+
+model Boutique {
+  id          String   @id @default(cuid())
+  nom         String
+  description String?
+  verifiee    Boolean  @default(false)
+  ville       VilleRDC @default(KISANGANI)
+
+  // Coordonnées de retrait des fonds renseignées par le vendeur
+  modeRetraitPaiement   String? // "M_PESA", "ORANGE_MONEY", "AIRTEL_MONEY"
+  numeroRetraitPaiement String?
+  nomTitulaireCompte    String?
+
+  proprietaire   User   @relation(fields: [proprietaireId], references: [id])
+  proprietaireId String @unique
+  produits       Produit[]
+  livreurs       AgentLivraison[]
+  createdAt      DateTime @default(now())
+}
+
+model AgentLivraison {
+  id         String     @id @default(cuid())
+  nom        String
+  telephone  String
+  photoUrl   String?
+  boutique   Boutique   @relation(fields: [boutiqueId], references: [id], onDelete: Cascade)
+  boutiqueId String
+  commandes  Commande[]
+  createdAt  DateTime   @default(now())
+}
+
+model Produit {
+  id          String   @id @default(cuid())
+  nom         String
+  description String?
+  prix        Float
+  stock       Int      @default(0)
+  photos      String[] // URLs stockage cloud
+  categorie   String?
+
+  villeOrigine       VilleRDC @default(KISANGANI)
+  quantiteExpediable Int      @default(0) // Quantité max expédiable hors de la ville d'origine
+
+  boutique       Boutique @relation(fields: [boutiqueId], references: [id])
+  boutiqueId     String
+  lignesCommande LigneCommande[]
+  lignesPanier   LignePanier[]
+  createdAt      DateTime @default(now())
+}
+
+model Adresse {
+  id        String @id @default(cuid())
+  user      User   @relation(fields: [userId], references: [id])
+  userId    String
+  ville     String
+  quartier  String
+  details   String?
+  commandes Commande[]
+}
+
+model Panier {
+  id        String        @id @default(cuid())
+  user      User          @relation(fields: [userId], references: [id])
+  userId    String        @unique
+  lignes    LignePanier[]
+  updatedAt DateTime      @updatedAt
+}
+
+model LignePanier {
+  id        String   @id @default(cuid())
+  panier    Panier   @relation(fields: [panierId], references: [id])
+  panierId  String
+  produit   Produit  @relation(fields: [produitId], references: [id])
+  produitId String
+  quantite  Int      @default(1)
+
+  @@unique([panierId, produitId])
+}
+
+model Litige {
+  id          String       @id @default(cuid())
+  commande    Commande     @relation(fields: [commandeId], references: [id])
+  commandeId  String       @unique
+  auteur      User         @relation(fields: [auteurId], references: [id])
+  auteurId    String
+  motif       String
+  description String?
+  statut      StatutLitige @default(OUVERT)
+  decision    String?
+  createdAt   DateTime     @default(now())
+}
+
+model Commande {
+  id           String @id @default(cuid())
+  codeCommande String @unique // ex: "KIS-000042", généré à la création
+
+  acheteur   User   @relation("commandesAcheteur", fields: [acheteurId], references: [id])
+  acheteurId String
+
+  agentLivraison   AgentLivraison? @relation(fields: [agentLivraisonId], references: [id])
+  agentLivraisonId String?
+
+  adresse   Adresse @relation(fields: [adresseId], references: [id])
+  adresseId String
+
+  statut StatutCommande @default(EN_ATTENTE)
+
+  // Livraison locale vs expédition inter-villes
+  typeLivraison         TypeLivraison @default(LOCALE)
+  villeDestination      VilleRDC
+  agenceTransport       String? // ex: "Classic", "TMK Transport"
+  numeroBordereauAgence String? // référence saisie par le vendeur à l'expédition
+
+  // Séquestre & preuve de paiement Mobile Money
+  statutPaiement    StatutPaiement @default(EN_ATTENTE_PREUVE)
+  preuvePaiementUrl String?
+  methodePaiement   String? // "M_PESA", "ORANGE_MONEY", "AIRTEL_MONEY", "ESPECES_LIVRAISON"
+
+  totalProduits  Float
+  fraisLivraison Float
+  totalPaye      Float
+
+  lignes     LigneCommande[]
+  evaluation Evaluation?
+  litige     Litige?
+  messages   MessageExpedition[]
+  createdAt  DateTime @default(now())
+}
+
+model LigneCommande {
+  id           String   @id @default(cuid())
+  commande     Commande @relation(fields: [commandeId], references: [id])
+  commandeId   String
+  produit      Produit  @relation(fields: [produitId], references: [id])
+  produitId    String
+  quantite     Int
+  prixUnitaire Float
+}
+
+// Négociation entre acheteur et vendeur sur les modalités d'expédition
+// inter-villes (choix de l'agence, délais, etc.)
+model MessageExpedition {
+  id           String   @id @default(cuid())
+  commande     Commande @relation(fields: [commandeId], references: [id])
+  commandeId   String
+  expediteur   User     @relation(fields: [expediteurId], references: [id])
+  expediteurId String
+  contenu      String
+  createdAt    DateTime @default(now())
+
+  @@index([commandeId])
+}
+
+model Evaluation {
+  id          String   @id @default(cuid())
+  commande    Commande @relation(fields: [commandeId], references: [id])
+  commandeId  String   @unique
+  auteur      User     @relation(fields: [auteurId], references: [id])
+  auteurId    String
+  note        Int      // 1 à 5
+  commentaire String?
+  createdAt   DateTime @default(now())
+}
