@@ -85,6 +85,12 @@ export default function VendeurDashboardPage() {
               + Produit
             </a>
             <a
+              href="/vendeur/produits"
+              className="rounded-lg border px-3 py-2 text-sm font-medium hover:border-primary hover:text-primary"
+            >
+              Mes produits
+            </a>
+            <a
               href="/vendeur/livreurs"
               className="rounded-lg border px-3 py-2 text-sm font-medium hover:border-primary hover:text-primary"
             >
