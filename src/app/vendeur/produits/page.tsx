@@ -19,6 +19,21 @@ export default function ProduitsVendeurPage() {
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState("");
 
+  async function supprimer(id: string, nom: string) {
+    if (!window.confirm("Supprimer le produit \"" + nom + "\" ? Cette action est d\u00e9finitive.")) return;
+    try {
+      const res = await fetch("/api/vendeur/produits/" + id, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) {
+        window.alert(data.erreur || "Suppression impossible.");
+        return;
+      }
+      setProduits((liste) => liste.filter((p) => p.id !== id));
+    } catch {
+      window.alert("Impossible de contacter le serveur. R\u00e9essaie.");
+    }
+  }
+
   useEffect(() => {
     async function chargerProduits() {
       try {
@@ -127,6 +142,13 @@ export default function ProduitsVendeurPage() {
                     <span className="text-gray-500">
                       Photos : {produit.photos?.length ?? 0}/3
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => supprimer(produit.id, produit.nom)}
+                      className="ml-auto text-sm font-medium text-red-600 hover:underline"
+                    >
+                      Supprimer
+                    </button>
                   </div>
                 </div>
               </article>
