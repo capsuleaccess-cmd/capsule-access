@@ -26,6 +26,26 @@ const libellesStatutPaiement: Record<string, string> = {
   REMBOURSE: "Remboursé",
 };
 
+// Le paiement en espèces à la livraison n'est pas un séquestre : la
+// plateforme n'a encore rien encaissé au moment de la commande. On adapte
+// donc le libellé au moyen de paiement réellement choisi par l'acheteur,
+// sans toucher au statutPaiement stocké en base (BLOQUE_SEQUESTRE sert
+// seulement à autoriser le vendeur à préparer la commande).
+function libellePaiement(
+  statutPaiement: string,
+  methodePaiement: string | null | undefined
+): string {
+  if (methodePaiement === "ESPECES_LIVRAISON") {
+    if (statutPaiement === "REMBOURSE") return "Remboursé";
+    if (statutPaiement === "LIBERE_VENDEUR") {
+      return "Payé en espèces à la livraison";
+    }
+    return "À payer en espèces à la livraison";
+  }
+
+  return libellesStatutPaiement[statutPaiement] ?? statutPaiement;
+}
+
 const libellesMethode: Record<string, string> = {
   M_PESA: "M-Pesa",
   ORANGE_MONEY: "Orange Money",
@@ -92,7 +112,7 @@ export default async function CommandeDetailPage({
               {commande.methodePaiement && libellesMethode[commande.methodePaiement]}
             </p>
             <p className="text-gray-600">
-              {libellesStatutPaiement[commande.statutPaiement]}
+              {libellePaiement(commande.statutPaiement, commande.methodePaiement)}
             </p>
           </div>
         )}

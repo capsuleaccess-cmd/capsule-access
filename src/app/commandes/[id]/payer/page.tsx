@@ -84,9 +84,9 @@ export default function PayerCommandePage({
       <main className="mx-auto max-w-md px-4 py-12">
         <h1 className="mb-2 text-2xl font-bold">Paiement</h1>
         <p className="mb-6 text-sm text-gray-600">
-          Envoie ton paiement au numéro Mobile Money de Capsule Access, puis
-          soumets la capture d'écran de la transaction. Tes fonds restent
-          protégés (séquestre) jusqu'à confirmation de la réception.
+          {espece
+            ? "Tu régleras le montant total en espèces au livreur, à la réception de la commande. Aucun envoi Mobile Money n'est nécessaire."
+            : "Envoie ton paiement au numéro Mobile Money de Capsule Access, puis soumets la capture d'écran de la transaction. Tes fonds restent protégés (séquestre) jusqu'à confirmation de la réception."}
         </p>
 
         <div className="mb-4 flex gap-2">
@@ -156,7 +156,11 @@ export default function PayerCommandePage({
           disabled={chargement || uploadEnCours}
           className="w-full rounded-lg bg-primary py-3 font-medium text-white hover:bg-primary-dark disabled:opacity-60"
         >
-          {chargement ? "Envoi..." : "Confirmer le paiement"}
+          {chargement
+            ? "Envoi..."
+            : espece
+            ? "Confirmer la commande (paiement à la livraison)"
+            : "Confirmer le paiement"}
         </button>
       </main>
     </>
