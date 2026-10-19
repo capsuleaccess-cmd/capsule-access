@@ -13,6 +13,8 @@ type Produit = {
   prix: number;
   stock: number;
   quantiteExpediable: number;
+  fraisTransport: number | null;
+  fraisExpedition: number | null;
   categorie: string | null;
   photos: string[];
   createdAt: string;
@@ -175,6 +177,22 @@ export default function ProduitsVendeurPage() {
                       <span className="text-gray-500">
                         Expédiable hors ville : {produit.quantiteExpediable ?? 0}
                       </span>
+                      <span className={produit.fraisTransport === null || produit.fraisTransport === undefined ? "font-medium text-amber-700" : "text-gray-500"}>
+                        {produit.fraisTransport === null || produit.fraisTransport === undefined
+                          ? "Frais de transport non configur\u00e9s"
+                          : produit.fraisTransport === 0
+                          ? "Livraison gratuite"
+                          : "Transport : " + Number(produit.fraisTransport).toLocaleString("fr-FR") + " FC"}
+                      </span>
+                      {(produit.quantiteExpediable ?? 0) > 0 && (
+                        <span className={produit.fraisExpedition === null || produit.fraisExpedition === undefined ? "font-medium text-amber-700" : "text-gray-500"}>
+                          {produit.fraisExpedition === null || produit.fraisExpedition === undefined
+                            ? "Frais d'exp\u00e9dition non configur\u00e9s"
+                            : produit.fraisExpedition === 0
+                            ? "Exp\u00e9dition gratuite"
+                            : "Exp\u00e9dition : " + Number(produit.fraisExpedition).toLocaleString("fr-FR") + " FC"}
+                        </span>
+                      )}
                       <span className="ml-auto flex gap-3">
                         <button
                           type="button"
@@ -224,6 +242,26 @@ function FormulaireEdition({
   );
   const [categorie, setCategorie] = useState(produit.categorie ?? categories[0]);
   const [photos, setPhotos] = useState<string[]>(produit.photos ?? []);
+  const [modeTransport, setModeTransport] = useState<"GRATUIT" | "PAYANT" | "">(
+    produit.fraisTransport === null || produit.fraisTransport === undefined
+      ? ""
+      : produit.fraisTransport === 0
+      ? "GRATUIT"
+      : "PAYANT"
+  );
+  const [fraisTransport, setFraisTransport] = useState(
+    produit.fraisTransport && produit.fraisTransport > 0 ? String(produit.fraisTransport) : ""
+  );
+  const [modeExpedition, setModeExpedition] = useState<"GRATUIT" | "PAYANT" | "">(
+    produit.fraisExpedition === null || produit.fraisExpedition === undefined
+      ? ""
+      : produit.fraisExpedition === 0
+      ? "GRATUIT"
+      : "PAYANT"
+  );
+  const [fraisExpedition, setFraisExpedition] = useState(
+    produit.fraisExpedition && produit.fraisExpedition > 0 ? String(produit.fraisExpedition) : ""
+  );
   const [uploadEnCours, setUploadEnCours] = useState(false);
   const [erreur, setErreur] = useState("");
   const [enregistrement, setEnregistrement] = useState(false);
@@ -269,6 +307,32 @@ function FormulaireEdition({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErreur("");
+    let fraisTransportFinal: number | undefined = undefined;
+    if (modeTransport === "GRATUIT") {
+      fraisTransportFinal = 0;
+    } else if (modeTransport === "PAYANT") {
+      const montant = Number(fraisTransport);
+      if (!fraisTransport.trim() || !Number.isFinite(montant) || montant <= 0) {
+        setErreur("Saisis un montant de transport strictement positif.");
+        return;
+      }
+      fraisTransportFinal = montant;
+    }
+
+    let fraisExpeditionFinal: number | undefined = undefined;
+    if (Number(quantiteExpediable) > 0) {
+      if (modeExpedition === "GRATUIT") {
+        fraisExpeditionFinal = 0;
+      } else if (modeExpedition === "PAYANT") {
+        const montantExp = Number(fraisExpedition);
+        if (!fraisExpedition.trim() || !Number.isFinite(montantExp) || montantExp <= 0) {
+          setErreur("Saisis un montant d'exp\u00e9dition strictement positif.");
+          return;
+        }
+        fraisExpeditionFinal = montantExp;
+      }
+    }
+
     setEnregistrement(true);
 
     try {
@@ -283,6 +347,8 @@ function FormulaireEdition({
           quantiteExpediable,
           categorie,
           photos,
+          ...(fraisTransportFinal !== undefined ? { fraisTransport: fraisTransportFinal } : {}),
+          ...(fraisExpeditionFinal !== undefined ? { fraisExpedition: fraisExpeditionFinal } : {}),
         }),
       });
 
@@ -413,6 +479,120 @@ function FormulaireEdition({
           </select>
         </div>
       </div>
+
+      <div className="mt-4 rounded-lg border p-3">
+        <p className="mb-2 text-sm font-medium">Frais de transport</p>
+        {modeTransport === "" && (
+          <p className="mb-2 text-xs text-amber-700">
+            Les frais de ce produit ne sont pas encore configur&eacute;s : choisis une option ci-dessous.
+          </p>
+        )}
+        <div className="space-y-3">
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="radio"
+              name="modeTransportEdition"
+              value="GRATUIT"
+              checked={modeTransport === "GRATUIT"}
+              onChange={() => {
+                setModeTransport("GRATUIT");
+                setFraisTransport("");
+              }}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-medium">Livraison gratuite</span>
+              <span className="block text-xs text-gray-500">Aucun frais de transport pour ce produit.</span>
+            </span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2">
+            <input
+              type="radio"
+              name="modeTransportEdition"
+              value="PAYANT"
+              checked={modeTransport === "PAYANT"}
+              onChange={() => setModeTransport("PAYANT")}
+              className="mt-1"
+            />
+            <span>
+              <span className="block text-sm font-medium">Livraison payante</span>
+              <span className="block text-xs text-gray-500">Tu fixes le montant des frais en FC.</span>
+            </span>
+          </label>
+        </div>
+        <div className="mt-3">
+          <label className="mb-1 block text-sm font-medium">Montant des frais (FC)</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            required={modeTransport === "PAYANT"}
+            disabled={modeTransport !== "PAYANT"}
+            value={fraisTransport}
+            onChange={(e) => setFraisTransport(e.target.value)}
+            placeholder="Ex. : 3000"
+            className="w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+          />
+        </div>
+      </div>
+
+      {Number(quantiteExpediable) > 0 && (
+        <div className="mt-4 rounded-lg border p-3">
+          <p className="mb-2 text-sm font-medium">Frais d&apos;exp&eacute;dition vers une autre ville</p>
+          {modeExpedition === "" && (
+            <p className="mb-2 text-xs text-amber-700">
+              Les frais d&apos;exp&eacute;dition de ce produit ne sont pas encore configur&eacute;s : choisis une option ci-dessous.
+            </p>
+          )}
+          <div className="space-y-3">
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="radio"
+                name="modeExpeditionEdition"
+                value="GRATUIT"
+                checked={modeExpedition === "GRATUIT"}
+                onChange={() => {
+                  setModeExpedition("GRATUIT");
+                  setFraisExpedition("");
+                }}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium">Exp&eacute;dition gratuite</span>
+                <span className="block text-xs text-gray-500">Aucun frais d&apos;exp&eacute;dition pour ce produit.</span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-2">
+              <input
+                type="radio"
+                name="modeExpeditionEdition"
+                value="PAYANT"
+                checked={modeExpedition === "PAYANT"}
+                onChange={() => setModeExpedition("PAYANT")}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-medium">Exp&eacute;dition payante</span>
+                <span className="block text-xs text-gray-500">Tu fixes le montant des frais en FC.</span>
+              </span>
+            </label>
+          </div>
+          <div className="mt-3">
+            <label className="mb-1 block text-sm font-medium">Montant des frais d&apos;exp&eacute;dition (FC)</label>
+            <input
+              type="number"
+              min="1"
+              step="1"
+              required={modeExpedition === "PAYANT"}
+              disabled={modeExpedition !== "PAYANT"}
+              value={fraisExpedition}
+              onChange={(e) => setFraisExpedition(e.target.value)}
+              placeholder="Ex. : 8000"
+              className="w-full rounded-lg border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+            />
+          </div>
+        </div>
+      )}
 
       {erreur && <p className="mt-4 text-sm text-red-600">{erreur}</p>}
 

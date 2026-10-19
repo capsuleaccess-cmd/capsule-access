@@ -1,0 +1,2 @@
+ALTER TABLE "Produit"
+ADD COLUMN "fraisExpedition" DOUBLE PRECISION;

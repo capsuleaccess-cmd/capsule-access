@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { nom, description, prix, stock, categorie, photos, quantiteExpediable } =
+  const { nom, description, prix, stock, categorie, photos, quantiteExpediable, fraisTransport, fraisExpedition } =
     await req.json();
   if (!nom || prix === undefined) {
     return NextResponse.json(
@@ -27,11 +27,52 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (fraisTransport === undefined || fraisTransport === null) {
+    return NextResponse.json(
+      { erreur: "Choisis la livraison gratuite ou la livraison payante." },
+      { status: 400 }
+    );
+  }
+  if (
+    typeof fraisTransport !== "number" ||
+    !Number.isFinite(fraisTransport) ||
+    fraisTransport < 0 ||
+    fraisTransport > 10000000
+  ) {
+    return NextResponse.json(
+      { erreur: "Le montant des frais de transport est invalide." },
+      { status: 400 }
+    );
+  }
+  const quantiteExp = quantiteExpediable ? parseInt(quantiteExpediable) : 0;
+  let fraisExpeditionFinal: number | null = null;
+  if (quantiteExp > 0) {
+    if (fraisExpedition === undefined || fraisExpedition === null) {
+      return NextResponse.json(
+        { erreur: "Fixe les frais d'exp\u00e9dition vers les autres villes." },
+        { status: 400 }
+      );
+    }
+    if (
+      typeof fraisExpedition !== "number" ||
+      !Number.isFinite(fraisExpedition) ||
+      fraisExpedition < 0 ||
+      fraisExpedition > 10000000
+    ) {
+      return NextResponse.json(
+        { erreur: "Le montant des frais d'exp\u00e9dition est invalide." },
+        { status: 400 }
+      );
+    }
+    fraisExpeditionFinal = fraisExpedition;
+  }
   const produit = await prisma.produit.create({
     data: {
       nom,
       description,
       prix: parseFloat(prix),
+      fraisTransport,
+      fraisExpedition: fraisExpeditionFinal,
       stock: stock ? parseInt(stock) : 0,
       categorie,
       photos: photos && Array.isArray(photos) ? photos : [],

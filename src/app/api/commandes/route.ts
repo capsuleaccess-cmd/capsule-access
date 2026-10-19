@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lireUtilisateurCourant } from "@/lib/auth";
-import { FRAIS_LIVRAISON_LOCALE, FRAIS_EXPEDITION_INTERVILLES } from "@/lib/config";
+import { calculerFraisLivraison } from "@/lib/fraisTransport";
 import { genererCodeCommande } from "@/lib/codeCommande";
 
 export async function POST(req: NextRequest) {
@@ -57,8 +57,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const fraisLivraison =
-    typeLivraison === "EXPEDITION" ? FRAIS_EXPEDITION_INTERVILLES : FRAIS_LIVRAISON_LOCALE;
+  const fraisCalcules = calculerFraisLivraison(
+    panier.lignes.map((l) => ({
+      quantite: l.quantite,
+      produit: {
+        nom: l.produit.nom,
+        boutiqueId: l.produit.boutiqueId,
+        villeOrigine: l.produit.villeOrigine,
+        fraisTransport: l.produit.fraisTransport,
+        fraisExpedition: l.produit.fraisExpedition,
+      },
+    })),
+    villeDestination
+  );
+  if (!fraisCalcules.ok) {
+    return NextResponse.json({ erreur: fraisCalcules.erreur }, { status: 400 });
+  }
+  const fraisLivraison = fraisCalcules.total;
 
   const totalProduits = panier.lignes.reduce(
     (s, l) => s + l.produit.prix * l.quantite,

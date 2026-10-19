@@ -10,6 +10,10 @@ export default function NouveauProduitPage() {
   const [nom, setNom] = useState("");
   const [description, setDescription] = useState("");
   const [prix, setPrix] = useState("");
+  const [modeTransport, setModeTransport] = useState<"GRATUIT" | "PAYANT" | "">("");
+  const [fraisTransport, setFraisTransport] = useState("");
+  const [modeExpedition, setModeExpedition] = useState<"GRATUIT" | "PAYANT" | "">("");
+  const [fraisExpedition, setFraisExpedition] = useState("");
   const [stock, setStock] = useState("");
   const [quantiteExpediable, setQuantiteExpediable] = useState("");
   const [categorie, setCategorie] = useState(categories[0]);
@@ -51,12 +55,42 @@ export default function NouveauProduitPage() {
     e.preventDefault();
     setErreur("");
     setSucces(false);
+
+    if (!modeTransport) {
+      setErreur("Choisis la livraison gratuite ou la livraison payante.");
+      return;
+    }
+
+    const fraisTransportFinal = modeTransport === "GRATUIT" ? 0 : Number(fraisTransport);
+    if (modeTransport === "PAYANT" && (!fraisTransport.trim() || !Number.isFinite(fraisTransportFinal) || fraisTransportFinal <= 0)) {
+      setErreur("Saisis un montant de transport strictement positif.");
+      return;
+    }
+
+    let fraisExpeditionFinal: number | undefined = undefined;
+    if (Number(quantiteExpediable) > 0) {
+      if (!modeExpedition) {
+        setErreur("Choisis l'exp\u00e9dition gratuite ou payante pour les autres villes.");
+        return;
+      }
+      if (modeExpedition === "GRATUIT") {
+        fraisExpeditionFinal = 0;
+      } else {
+        const montantExp = Number(fraisExpedition);
+        if (!fraisExpedition.trim() || !Number.isFinite(montantExp) || montantExp <= 0) {
+          setErreur("Saisis un montant d'exp\u00e9dition strictement positif.");
+          return;
+        }
+        fraisExpeditionFinal = montantExp;
+      }
+    }
+
     setChargement(true);
 
     const res = await fetch("/api/produits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nom, description, prix, stock, categorie, photos, quantiteExpediable }),
+      body: JSON.stringify({ nom, description, prix, stock, categorie, photos, quantiteExpediable, fraisTransport: fraisTransportFinal, fraisExpedition: fraisExpeditionFinal }),
     });
 
     setChargement(false);
@@ -71,6 +105,10 @@ export default function NouveauProduitPage() {
     setNom("");
     setDescription("");
     setPrix("");
+    setModeTransport("");
+    setModeExpedition("");
+    setFraisExpedition("");
+    setFraisTransport("");
     setStock("");
     setPhotos([]);
   }
@@ -173,6 +211,103 @@ export default function NouveauProduitPage() {
             </p>
           </div>
 
+          <div className="rounded-lg border p-3">
+            <p className="mb-2 text-sm font-medium">Frais de transport</p>
+            <div className="space-y-3">
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name="modeTransport"
+                  value="GRATUIT"
+                  checked={modeTransport === "GRATUIT"}
+                  onChange={() => { setModeTransport("GRATUIT"); setFraisTransport(""); }}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-medium">Livraison gratuite</span>
+                  <span className="block text-xs text-gray-500">Aucun frais de transport pour ce produit.</span>
+                </span>
+              </label>
+              <label className="flex cursor-pointer items-start gap-2">
+                <input
+                  type="radio"
+                  name="modeTransport"
+                  value="PAYANT"
+                  checked={modeTransport === "PAYANT"}
+                  onChange={() => setModeTransport("PAYANT")}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-medium">Livraison payante</span>
+                  <span className="block text-xs text-gray-500">Tu fixes le montant des frais en FC.</span>
+                </span>
+              </label>
+            </div>
+            <div className="mt-3">
+              <label className="mb-1 block text-sm font-medium">Montant des frais (FC)</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                required={modeTransport === "PAYANT"}
+                disabled={modeTransport !== "PAYANT"}
+                value={fraisTransport}
+                onChange={(e) => setFraisTransport(e.target.value)}
+                placeholder="Ex. : 3000"
+                className="w-full rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              />
+              {modeTransport === "GRATUIT" && <p className="mt-1 text-xs text-green-700">Les frais seront de 0 FC.</p>}
+            </div>
+          </div>
+          {Number(quantiteExpediable) > 0 && (
+            <div className="rounded-lg border p-3">
+              <p className="mb-2 text-sm font-medium">Frais d&apos;exp&eacute;dition vers une autre ville</p>
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="radio"
+                    name="modeExpedition"
+                    value="GRATUIT"
+                    checked={modeExpedition === "GRATUIT"}
+                    onChange={() => { setModeExpedition("GRATUIT"); setFraisExpedition(""); }}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Exp&eacute;dition gratuite</span>
+                    <span className="block text-xs text-gray-500">Aucun frais d&apos;exp&eacute;dition pour ce produit.</span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2">
+                  <input
+                    type="radio"
+                    name="modeExpedition"
+                    value="PAYANT"
+                    checked={modeExpedition === "PAYANT"}
+                    onChange={() => setModeExpedition("PAYANT")}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Exp&eacute;dition payante</span>
+                    <span className="block text-xs text-gray-500">Tu fixes le montant des frais en FC.</span>
+                  </span>
+                </label>
+              </div>
+              <div className="mt-3">
+                <label className="mb-1 block text-sm font-medium">Montant des frais d&apos;exp&eacute;dition (FC)</label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  required={modeExpedition === "PAYANT"}
+                  disabled={modeExpedition !== "PAYANT"}
+                  value={fraisExpedition}
+                  onChange={(e) => setFraisExpedition(e.target.value)}
+                  placeholder="Ex. : 8000"
+                  className="w-full rounded-lg border px-3 py-2 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                />
+              </div>
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-sm font-medium">Catégorie</label>
             <select

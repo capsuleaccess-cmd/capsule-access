@@ -126,6 +126,8 @@ model Produit {
   nom         String
   description String?
   prix        Float
+  fraisTransport Float?
+  fraisExpedition Float?
   stock       Int      @default(0)
   photos      String[] // URLs stockage cloud
   categorie   String?

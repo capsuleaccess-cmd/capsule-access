@@ -3,13 +3,22 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
-import { VILLES, FRAIS_LIVRAISON_LOCALE, FRAIS_EXPEDITION_INTERVILLES } from "@/lib/config";
+import { VILLES } from "@/lib/config";
+import { calculerFraisLivraison } from "@/lib/fraisTransport";
 
 type Adresse = { id: string; ville: string; quartier: string; details?: string | null };
 type LignePanier = {
   produitId: string;
   quantite: number;
-  produit: { nom: string; prix: number; villeOrigine: string; quantiteExpediable: number };
+  produit: {
+    nom: string;
+    prix: number;
+    boutiqueId: string;
+    villeOrigine: string;
+    quantiteExpediable: number;
+    fraisTransport: number | null;
+    fraisExpedition: number | null;
+  };
 };
 
 export default function CommandePage() {
@@ -56,11 +65,24 @@ export default function CommandePage() {
 
   const totalProduits = lignes.reduce((s, l) => s + l.produit.prix * l.quantite, 0);
 
+  const calculFrais = calculerFraisLivraison(
+    lignes.map((l) => ({
+      quantite: l.quantite,
+      produit: {
+        nom: l.produit.nom,
+        boutiqueId: l.produit.boutiqueId,
+        villeOrigine: l.produit.villeOrigine,
+        fraisTransport: l.produit.fraisTransport,
+        fraisExpedition: l.produit.fraisExpedition,
+      },
+    })),
+    villeDestination
+  );
   const typeLivraisonEstime = lignes.some((l) => l.produit.villeOrigine !== villeDestination)
     ? "EXPEDITION"
     : "LOCALE";
-  const fraisLivraison =
-    typeLivraisonEstime === "EXPEDITION" ? FRAIS_EXPEDITION_INTERVILLES : FRAIS_LIVRAISON_LOCALE;
+  const fraisLivraison = calculFrais.ok ? calculFrais.total : 0;
+  const erreurFrais = calculFrais.ok ? "" : calculFrais.erreur;
 
   async function confirmerCommande(e: React.FormEvent) {
     e.preventDefault();
@@ -252,22 +274,23 @@ export default function CommandePage() {
                 <span>
                   Livraison {typeLivraisonEstime === "EXPEDITION" ? "(expédition)" : "(locale)"}
                 </span>
-                <span>{fraisLivraison.toFixed(0)} FC</span>
+                <span>{erreurFrais ? "\u2014" : fraisLivraison.toFixed(0) + " FC"}</span>
               </div>
               <div className="flex justify-between border-t pt-2 text-base font-bold">
                 <span>Total</span>
                 <span className="text-primary">
-                  {(totalProduits + fraisLivraison).toFixed(0)} FC
+                  {erreurFrais ? "\u2014" : (totalProduits + fraisLivraison).toFixed(0) + " FC"}
                 </span>
               </div>
             </div>
           </section>
 
+          {erreurFrais && <p className="text-sm text-red-600">{erreurFrais}</p>}
           {erreur && <p className="text-sm text-red-600">{erreur}</p>}
 
           <button
             type="submit"
-            disabled={envoi}
+            disabled={envoi || erreurFrais !== ""}
             className="w-full rounded-lg bg-primary py-3 font-medium text-white hover:bg-primary-dark disabled:opacity-60"
           >
             {envoi ? "Confirmation..." : "Confirmer la commande"}

@@ -66,6 +66,8 @@ export async function PATCH(
     categorie?: string | null;
     photos?: string[];
     quantiteExpediable?: number;
+    fraisTransport?: number;
+    fraisExpedition?: number;
   } = {};
 
   if (corps.nom !== undefined) {
@@ -121,6 +123,22 @@ export async function PATCH(
     donnees.quantiteExpediable = quantite;
   }
 
+  if (corps.fraisTransport !== undefined) {
+    const frais =
+      typeof corps.fraisTransport === "number" ? corps.fraisTransport : NaN;
+    if (!Number.isFinite(frais) || frais < 0 || frais > 10000000) {
+      return messageErreur("Le montant des frais de transport est invalide.");
+    }
+    donnees.fraisTransport = frais;
+  }
+  if (corps.fraisExpedition !== undefined) {
+    const fraisExp =
+      typeof corps.fraisExpedition === "number" ? corps.fraisExpedition : NaN;
+    if (!Number.isFinite(fraisExp) || fraisExp < 0 || fraisExp > 10000000) {
+      return messageErreur("Le montant des frais d'exp\u00e9dition est invalide.");
+    }
+    donnees.fraisExpedition = fraisExp;
+  }
   if (corps.categorie !== undefined) {
     const categorie =
       corps.categorie === null ? "" : String(corps.categorie).trim();
