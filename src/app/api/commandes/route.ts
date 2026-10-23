@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
 
   // Détecte si au moins un produit doit être expédié hors de sa ville
   // d'origine, et vérifie les quantités disponibles en conséquence.
-  let typeLivraison: "LOCALE" | "EXPEDITION" = "LOCALE";
 
   for (const ligne of panier.lignes) {
     if (ligne.quantite > ligne.produit.stock) {
@@ -45,7 +44,6 @@ export async function POST(req: NextRequest) {
     }
 
     if (ligne.produit.villeOrigine !== villeDestination) {
-      typeLivraison = "EXPEDITION";
       if (ligne.quantite > ligne.produit.quantiteExpediable) {
         return NextResponse.json(
           {
@@ -57,53 +55,78 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const fraisCalcules = calculerFraisLivraison(
-    panier.lignes.map((l) => ({
-      quantite: l.quantite,
-      produit: {
-        nom: l.produit.nom,
-        boutiqueId: l.produit.boutiqueId,
-        villeOrigine: l.produit.villeOrigine,
-        fraisTransport: l.produit.fraisTransport,
-        fraisExpedition: l.produit.fraisExpedition,
-      },
-    })),
-    villeDestination
-  );
-  if (!fraisCalcules.ok) {
-    return NextResponse.json({ erreur: fraisCalcules.erreur }, { status: 400 });
+  // Une commande par boutique : chaque vendeur valide, prepare et expedie la sienne.
+  const groupes = new Map<string, typeof panier.lignes>();
+  for (const ligne of panier.lignes) {
+    const liste = groupes.get(ligne.produit.boutiqueId) ?? [];
+    liste.push(ligne);
+    groupes.set(ligne.produit.boutiqueId, liste);
   }
-  const fraisLivraison = fraisCalcules.total;
 
-  const totalProduits = panier.lignes.reduce(
-    (s, l) => s + l.produit.prix * l.quantite,
-    0
-  );
+  const preparees: {
+    lignes: typeof panier.lignes;
+    totalProduits: number;
+    fraisLivraison: number;
+    typeLivraison: "LOCALE" | "EXPEDITION";
+  }[] = [];
 
-  const codeCommande = await genererCodeCommande(villeDestination);
-
-  const commande = await prisma.$transaction(async (tx) => {
-    const nouvelleCommande = await tx.commande.create({
-      data: {
-        codeCommande,
-        acheteurId: session.id,
-        adresseId,
-        villeDestination,
-        typeLivraison,
-        totalProduits,
-        fraisLivraison,
-        totalPaye: totalProduits + fraisLivraison,
-        statut: "EN_ATTENTE",
-        lignes: {
-          create: panier.lignes.map((l) => ({
-            produitId: l.produitId,
-            quantite: l.quantite,
-            prixUnitaire: l.produit.prix,
-          })),
+  for (const lignes of Array.from(groupes.values())) {
+    const frais = calculerFraisLivraison(
+      lignes.map((l) => ({
+        quantite: l.quantite,
+        produit: {
+          nom: l.produit.nom,
+          boutiqueId: l.produit.boutiqueId,
+          villeOrigine: l.produit.villeOrigine,
+          fraisTransport: l.produit.fraisTransport,
+          fraisExpedition: l.produit.fraisExpedition,
         },
-      },
-      include: { lignes: true },
+      })),
+      villeDestination
+    );
+    if (!frais.ok) {
+      return NextResponse.json({ erreur: frais.erreur }, { status: 400 });
+    }
+    preparees.push({
+      lignes,
+      totalProduits: lignes.reduce((s, l) => s + l.produit.prix * l.quantite, 0),
+      fraisLivraison: frais.total,
+      typeLivraison: frais.typeLivraison,
     });
+  }
+
+  const codes: string[] = [];
+  for (let i = 0; i < preparees.length; i++) {
+    codes.push(await genererCodeCommande(villeDestination, i));
+  }
+
+  const commandes = await prisma.$transaction(async (tx) => {
+    const creees = [];
+    for (let i = 0; i < preparees.length; i++) {
+      const p = preparees[i];
+      const nouvelle = await tx.commande.create({
+        data: {
+          codeCommande: codes[i],
+          acheteurId: session.id,
+          adresseId,
+          villeDestination,
+          typeLivraison: p.typeLivraison,
+          totalProduits: p.totalProduits,
+          fraisLivraison: p.fraisLivraison,
+          totalPaye: p.totalProduits + p.fraisLivraison,
+          statut: "EN_ATTENTE",
+          lignes: {
+            create: p.lignes.map((l) => ({
+              produitId: l.produitId,
+              quantite: l.quantite,
+              prixUnitaire: l.produit.prix,
+            })),
+          },
+        },
+        include: { lignes: true },
+      });
+      creees.push(nouvelle);
+    }
 
     for (const ligne of panier.lignes) {
       await tx.produit.update({
@@ -114,10 +137,17 @@ export async function POST(req: NextRequest) {
 
     await tx.lignePanier.deleteMany({ where: { panierId: panier.id } });
 
-    return nouvelleCommande;
+    return creees;
   });
 
-  return NextResponse.json(commande);
+  return NextResponse.json({
+    ...commandes[0],
+    commandes: commandes.map((c) => ({
+      id: c.id,
+      codeCommande: c.codeCommande,
+      totalPaye: c.totalPaye,
+    })),
+  });
 }
 
 export async function GET() {

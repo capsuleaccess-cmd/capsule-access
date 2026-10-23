@@ -8,6 +8,7 @@ type Commande = {
   codeCommande: string;
   statut: string;
   totalPaye: number;
+  statutPaiement: string;
   createdAt: string;
   lignes: {
     id: string;
@@ -73,6 +74,13 @@ export default function CommandesPage() {
       <main className="mx-auto max-w-3xl px-4 py-8">
         <h1 className="mb-6 text-2xl font-bold">Mes commandes</h1>
 
+        {commandes.filter((c) => c.statutPaiement === "EN_ATTENTE_PREUVE").length > 1 && (
+          <div className="mb-5 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+            Ton panier contenait des produits de plusieurs boutiques : chaque boutique a sa propre
+            commande, &agrave; payer s&eacute;par&eacute;ment avec le bouton &laquo; Payer cette commande &raquo;.
+          </div>
+        )}
+
         {commandes.length === 0 ? (
           <div className="rounded-xl border bg-white p-6 text-center">
             <p className="text-gray-500">Tu n'as encore aucune commande.</p>
@@ -103,7 +111,7 @@ export default function CommandesPage() {
                   </div>
 
                   <p className="font-semibold text-primary">
-                    {commande.totalPaye.toFixed(2)} $
+                    {Number(commande.totalPaye).toLocaleString("fr-FR")} FC
                   </p>
                 </div>
 
@@ -119,6 +127,15 @@ export default function CommandesPage() {
                   <span className="text-sm font-medium">
                     {libellesStatut[commande.statut] || commande.statut}
                   </span>
+
+                  {commande.statutPaiement === "EN_ATTENTE_PREUVE" && (
+                    <a
+                      href={`/commandes/${commande.id}/payer`}
+                      className="rounded-lg border border-primary px-4 py-2 text-center text-sm font-medium text-primary hover:bg-primary/5"
+                    >
+                      Payer cette commande
+                    </a>
+                  )}
 
                   <a
                     href={`/commandes/${commande.id}`}

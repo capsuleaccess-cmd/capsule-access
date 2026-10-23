@@ -122,7 +122,12 @@ export default function CommandePage() {
     }
 
     const commande = await res.json();
-    router.push(`/commandes/${commande.id}/payer`);
+    const nombreCommandes = Array.isArray(commande.commandes) ? commande.commandes.length : 1;
+    if (nombreCommandes > 1) {
+      router.push("/commandes");
+    } else {
+      router.push(`/commandes/${commande.id}/payer`);
+    }
   }
 
   if (chargement) {
